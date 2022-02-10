@@ -1,0 +1,12 @@
+[package]
+name = "todo_core"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy_app = "0.6.0"
+bevy_ecs = "0.6.0"
+crossbeam-channel = "0.5"
+chrono = "0.4"
