@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 dioxus = { version = "0.1.8", features = ["desktop"] }
 todo_core = { path = "../core" }
-crossbeam-channel = "0.5"
+tokio = { version = "1.16", features = ["full"] }
 

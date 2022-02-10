@@ -1,10 +1,10 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ECSCommand {
     ListTodo,
     CreateTodo(CreateTodoParams),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CreateTodoParams {
     pub name: String,
 }

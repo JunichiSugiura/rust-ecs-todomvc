@@ -2,9 +2,9 @@ use crate::command::{ecs::ECSCommand, ui::UICommand};
 use bevy_app::prelude::*;
 use bevy_ecs::{event::Events, prelude::*};
 use chrono::prelude::*;
-use crossbeam_channel::{Receiver, Sender};
+use tokio::sync::broadcast::{Sender};
 
-pub fn start_ecs(sender: Sender<UICommand>, receiver: Receiver<ECSCommand>) {
+pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
     App::new()
         .set_runner(runner)
         .insert_resource(sender)
@@ -38,20 +38,25 @@ struct Done(bool);
 fn runner(mut app: App) {
     app.update();
 
-    loop {
-        let mut update = false;
-        if let Some(rx) = app.world.get_resource_mut::<Receiver<ECSCommand>>() {
-            for cmd in rx.try_recv() {
-                update = true;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<ECSCommand>(32);
 
-                let mut event = app.world.get_resource_mut::<Events<ECSCommand>>().unwrap();
-                event.send(cmd);
-            }
+    let runtime = tokio::runtime::Runtime::new().unwrap();
 
-            if update {
-                app.update();
-            }
-        }
+    if let Some(sender) = app.world.get_resource_mut::<Sender<ECSCommand>>() {
+            let mut rx = sender.subscribe();
+            runtime.spawn(async move {
+                loop {
+                    while let Ok(cmd) = rx.recv().await {
+                        let _ = tx.send(cmd).await;
+                    }
+                }
+            });
+    }
+
+    while let Some(cmd) = rx.blocking_recv() {
+        let mut event = app.world.get_resource_mut::<Events<ECSCommand>>().unwrap();
+        event.send(cmd);
+        app.update();
     }
 }
 
