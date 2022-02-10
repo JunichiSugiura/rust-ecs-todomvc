@@ -11,6 +11,14 @@ pub struct AppProps {
     pub receiver: Cell<Option<Sender<UICommand>>>,
 }
 
+fn use_once(cx: &ScopeState, f: impl FnOnce()) {
+    let init = cx.use_hook(|_| true);
+    if *init {
+        f();
+        *init = false;
+    }
+}
+
 pub fn app(cx: Scope<AppProps>) -> Element {
     let (list, set_list)= use_state(&cx, || UITodoList::default());
     let (name, set_name) = use_state(&cx, || String::new());
@@ -23,7 +31,7 @@ pub fn app(cx: Scope<AppProps>) -> Element {
         async move {
             if let Some(receiver) = receiver {
                 while let Ok(cmd) = receiver.subscribe().recv().await {
-                    println!("{:?}", cmd);
+                    println!("🎨 {:?}", cmd);
 
                     match cmd {
                         UICommand::ListTodo(list) | UICommand::CreateTodo(list) => {
@@ -33,6 +41,10 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                 }
             }
         }
+    });
+
+    use_once(&cx, || {
+        let _res = sender.read().send(ECSCommand::ListTodo);
     });
 
     let submit = move || {
@@ -67,23 +79,17 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                 }
             }
 
-            button {
-                onclick: move |_| {
-                    let _res = sender.read().send(ECSCommand::ListTodo);
-                },
-                "List"
-            }
-
-            list.iter().map(|item| {
+            list.iter().enumerate().map(|(i, item)| {
                 let created_at = item.created_at.format("%Y-%m-%d %H:%M:%S");
                 let done = if item.done { "✅" } else { "❌" };
+                let index = i + 1;
                 rsx!(
                     div {
                         div {
-                            "{done}"
+                            "Task #{index}: {item.name}"
                         }
                         div {
-                            "{item.name}"
+                            "Status: {done}"
                         }
                         div {
                             "{created_at}"

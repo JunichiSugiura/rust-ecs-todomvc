@@ -101,7 +101,7 @@ fn notify_list_todo(
 ) {
     for event in events.iter() {
         if let NotifyCommand::ListTodo = event {
-            println!("🔔 List Todo");
+            println!("🧠 List Todo");
 
             let mut list = vec![];
             for (name, created_at, done) in  query.iter() {
@@ -124,7 +124,7 @@ fn notify_create_todo(
 ) {
     for event in events.iter() {
         if let NotifyCommand::CreateTodo(_target_entity) = event {
-            println!("🔔 Create Todo");
+            println!("🧠 Create Todo");
 
             let mut list = vec![];
             for (name, created_at, done) in  query.iter() {
