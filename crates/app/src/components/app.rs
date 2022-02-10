@@ -12,17 +12,24 @@ pub struct AppProps {
 }
 
 pub fn app(cx: Scope<AppProps>) -> Element {
-    let _todo_list = use_state(&cx, || UITodoList::default());
+    let (list, set_list)= use_state(&cx, || UITodoList::default());
     let (name, set_name) = use_state(&cx, || String::new());
     let sender = use_ref(&cx, || cx.props.sender.take().unwrap());
     let disable_submit = name.is_empty();
 
     use_future(&cx, || {
         let receiver = cx.props.receiver.take();
+        let set_list = set_list.to_owned();
         async move {
             if let Some(receiver) = receiver {
                 while let Ok(cmd) = receiver.subscribe().recv().await {
                     println!("{:?}", cmd);
+
+                    match cmd {
+                        UICommand::ListTodo(list) | UICommand::CreateTodo(list) => {
+                            set_list(list);
+                        },
+                    }
                 }
             }
         }
@@ -59,12 +66,31 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                     "Create"
                 }
             }
+
             button {
                 onclick: move |_| {
                     let _res = sender.read().send(ECSCommand::ListTodo);
                 },
                 "List"
             }
+
+            list.iter().map(|item| {
+                let created_at = item.created_at.format("%Y-%m-%d %H:%M:%S");
+                let done = if item.done { "✅" } else { "❌" };
+                rsx!(
+                    div {
+                        div {
+                            "{done}"
+                        }
+                        div {
+                            "{item.name}"
+                        }
+                        div {
+                            "{created_at}"
+                        }
+                    }
+                )
+            })
         }
     })
 }

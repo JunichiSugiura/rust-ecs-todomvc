@@ -1,4 +1,4 @@
-use crate::command::{ecs::ECSCommand, ui::UICommand};
+use crate::command::{ecs::ECSCommand, ui::{UICommand, UITodoItem}};
 use bevy_app::prelude::*;
 use bevy_ecs::{event::Events, prelude::*};
 use chrono::prelude::*;
@@ -24,7 +24,7 @@ pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
 #[derive(Component)]
 struct Todo;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct Name(String);
 
 #[derive(Component)]
@@ -97,46 +97,44 @@ fn handle_create_todo(
 fn notify_list_todo(
     mut events: EventReader<NotifyCommand>,
     query: Query<(&Name, &CreatedAt, &Done), With<Todo>>,
+    sender: Res<Sender<UICommand>>
 ) {
     for event in events.iter() {
-        if matches!(event, NotifyCommand::ListTodo) {
+        if let NotifyCommand::ListTodo = event {
             println!("🔔 List Todo");
-            if query.iter().count() == 0 {
-                println!("empty...",);
-            } else {
-                for (i, (name, created_at, done)) in query.iter().enumerate() {
-                    println!(
-                        "{}: {}, {} {}",
-                        i + 1,
-                        name.0,
-                        created_at.0.format("%Y-%m-%d %H:%M:%S"),
-                        if done.0 { "✅" } else { "❌" }
-                    );
-                }
+
+            let mut list = vec![];
+            for (name, created_at, done) in  query.iter() {
+                list.push(UITodoItem {
+                    name: name.0.clone(),
+                    created_at: created_at.0,
+                    done: done.0,
+                });
             }
-            println!("");
+            let _res = sender.send(UICommand::ListTodo(list));
         }
     }
 }
 
+// TODO: consider sending just a diff but it requires more work on UI side
 fn notify_create_todo(
     mut events: EventReader<NotifyCommand>,
-    query: Query<(Entity, &Name, &CreatedAt, &Done), With<Todo>>,
+    query: Query<(&Name, &CreatedAt, &Done), With<Todo>>,
+    sender: Res<Sender<UICommand>>
 ) {
     for event in events.iter() {
-        if let NotifyCommand::CreateTodo(target_entity) = event {
+        if let NotifyCommand::CreateTodo(_target_entity) = event {
             println!("🔔 Create Todo");
-            for (entity, name, created_at, done) in query.iter() {
-                if entity == *target_entity {
-                    println!(
-                        "{}, {} {}",
-                        name.0,
-                        created_at.0.format("%Y-%m-%d %H:%M:%S"),
-                        if done.0 { "✅" } else { "❌" }
-                    );
-                }
+
+            let mut list = vec![];
+            for (name, created_at, done) in  query.iter() {
+                list.push(UITodoItem {
+                    name: name.0.clone(),
+                    created_at: created_at.0,
+                    done: done.0,
+                });
             }
-            println!("");
+            let _res = sender.send(UICommand::CreateTodo(list));
         }
     }
 }
