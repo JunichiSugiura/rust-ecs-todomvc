@@ -6,7 +6,7 @@ use todo_core::command::{
     ecs::{CreateParams, ECSCommand, UpdateParams},
     ui::{UICommand, UITodoList},
 };
-use tokio::sync::broadcast::{Sender};
+use tokio::sync::broadcast::Sender;
 
 pub struct AppProps {
     pub sender: Cell<Option<Sender<ECSCommand>>>,
@@ -33,28 +33,40 @@ macro_rules! styled {
                 }
             })
         }
-    }
+    };
 }
 
-styled!(Title, div, "
+styled!(
+    Title,
+    div,
+    "
     font-size: 6.25rem;
     color: rgba(175, 47, 47, 0.15);
-");
+"
+);
 
-styled!(Box, div, "
+styled!(
+    Box,
+    div,
+    "
     background: #f5f5f5;
     display: flex;
     flex-direction: column;
     align-items: center;
     height: 100vh;
     width: 100%;
-");
+"
+);
 
-styled!(Item, div, "
+styled!(
+    Item,
+    div,
+    "
     display: flex;
     align-items: center;
     width: 30rem;
-");
+"
+);
 
 styled!(ItemTitle, div, "");
 
@@ -65,17 +77,18 @@ pub fn app(cx: Scope<AppProps>) -> Element {
 
     use_future(&cx, || {
         let receiver = cx.props.receiver.take();
-        let set_list = set_list.to_owned(); async move {
+        let set_list = set_list.to_owned();
+        async move {
             if let Some(receiver) = receiver {
                 while let Ok(cmd) = receiver.subscribe().recv().await {
                     println!("🎨 {:?}", cmd);
 
                     match cmd {
-                        UICommand::List(list) |
-                        UICommand::Create(list) |
-                        UICommand::Update(list) => {
+                        UICommand::List(list)
+                        | UICommand::Create(list)
+                        | UICommand::Update(list) => {
                             set_list(list);
-                        },
+                        }
                     }
                 }
             }
@@ -128,7 +141,10 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                                     name: None,
                                 };
                                 let _res = sender.read().send(ECSCommand::Update(params));
-                            }
+                            },
+                            item.done.then(|| rsx!{
+                                "✅"
+                            })
                         }
                         ItemTitle {
                             "{item.name}"
