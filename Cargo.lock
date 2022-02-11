@@ -35,15 +35,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
 
 [[package]]
-name = "app"
-version = "0.0.0"
-dependencies = [
- "dioxus",
- "todo_core",
- "tokio",
-]
-
-[[package]]
 name = "argh"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,6 +584,15 @@ dependencies = [
  "darling_core",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "desktop"
+version = "0.0.0"
+dependencies = [
+ "dioxus",
+ "todo_core",
+ "tokio",
 ]
 
 [[package]]

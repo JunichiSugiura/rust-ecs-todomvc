@@ -37,15 +37,6 @@ macro_rules! styled {
 }
 
 styled!(
-    Title,
-    div,
-    "
-    font-size: 6.25rem;
-    color: rgba(175, 47, 47, 0.15);
-"
-);
-
-styled!(
     Box,
     div,
     "
@@ -59,12 +50,37 @@ styled!(
 );
 
 styled!(
+    Header,
+    div,
+    " display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 1rem;
+"
+);
+
+styled!(
+    List, div, "
+"
+);
+
+styled!(
+    Title,
+    div,
+    "
+    font-size: 6.25rem;
+    color: rgba(175, 47, 47, 0.15);
+"
+);
+
+styled!(
     Item,
     div,
     "
     display: flex;
     align-items: center;
-    width: 30rem;
+    width: 20rem;
+    padding: 0.5rem;
 "
 );
 
@@ -112,46 +128,50 @@ pub fn app(cx: Scope<AppProps>) -> Element {
         style { [include_str!("../styles/global.css")] },
 
         Box {
-            Title {
-                "todos"
-            }
-            div {
-                input {
-                    placeholder: "What needs to be done?",
-                    value: "{name}",
-                    autofocus: "true",
-                    oninput: move |e| set_name(e.value.clone()),
-                    onkeydown: move |e| {
-                        if e.key == "Enter" {
-                            submit();
+            Header {
+                Title {
+                    "todos"
+                }
+                div {
+                    input {
+                        placeholder: "What needs to be done?",
+                        value: "{name}",
+                        autofocus: "true",
+                        oninput: move |e| set_name(e.value.clone()),
+                        onkeydown: move |e| {
+                            if e.key == "Enter" {
+                                submit();
+                            }
                         }
                     }
                 }
             }
 
-            list.iter().map(|item| {
-                rsx!(
-                    Item {
-                        div {
-                            class: "checkbox",
-                            onclick: |_| {
-                                let params = UpdateParams{
-                                    entity: item.entity,
-                                    done: Some(!item.done),
-                                    name: None,
-                                };
-                                let _res = sender.read().send(ECSCommand::Update(params));
-                            },
-                            item.done.then(|| rsx!{
-                                "✅"
-                            })
+            List {
+                list.iter().map(|item| {
+                    rsx!(
+                        Item {
+                            div {
+                                class: "checkbox",
+                                onclick: |_| {
+                                    let params = UpdateParams{
+                                        entity: item.entity,
+                                        done: Some(!item.done),
+                                        name: None,
+                                    };
+                                    let _res = sender.read().send(ECSCommand::Update(params));
+                                },
+                                item.done.then(|| rsx!{
+                                    "✅"
+                                })
+                            }
+                            ItemTitle {
+                                "{item.name}"
+                            }
                         }
-                        ItemTitle {
-                            "{item.name}"
-                        }
-                    }
-                )
-            })
+                    )
+                })
+            }
         }
     })
 }
