@@ -1,8 +1,11 @@
-use crate::command::{ecs::ECSCommand, ui::{UICommand, UITodoItem}};
+use crate::command::{
+    ecs::ECSCommand,
+    ui::{UICommand, UITodoItem},
+};
 use bevy_app::prelude::*;
 use bevy_ecs::{event::Events, prelude::*};
 use chrono::prelude::*;
-use tokio::sync::broadcast::{Sender};
+use tokio::sync::broadcast::Sender;
 
 pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
     App::new()
@@ -14,8 +17,10 @@ pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
         .add_startup_system(setup)
         .add_system(handle_list_todo)
         .add_system(handle_create_todo)
+        .add_system(handle_update_todo)
         .add_system_to_stage(CoreStage::Last, notify_list_todo)
         .add_system_to_stage(CoreStage::Last, notify_create_todo)
+        .add_system_to_stage(CoreStage::Last, notify_update_todo)
         .run();
 }
 
@@ -31,6 +36,9 @@ struct Name(String);
 struct CreatedAt(DateTime<Utc>);
 
 #[derive(Component)]
+struct UpdatedAt(Option<DateTime<Utc>>);
+
+#[derive(Component)]
 struct Done(bool);
 
 // Runner
@@ -43,14 +51,14 @@ fn runner(mut app: App) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     if let Some(sender) = app.world.get_resource_mut::<Sender<ECSCommand>>() {
-            let mut rx = sender.subscribe();
-            runtime.spawn(async move {
-                loop {
-                    while let Ok(cmd) = rx.recv().await {
-                        let _ = tx.send(cmd).await;
-                    }
+        let mut rx = sender.subscribe();
+        runtime.spawn(async move {
+            loop {
+                while let Ok(cmd) = rx.recv().await {
+                    let _ = tx.send(cmd).await;
                 }
-            });
+            }
+        });
     }
 
     while let Some(cmd) = rx.blocking_recv() {
@@ -68,8 +76,8 @@ fn setup() {
 
 fn handle_list_todo(mut events: EventReader<ECSCommand>, mut notify: EventWriter<NotifyCommand>) {
     for event in events.iter() {
-        if let ECSCommand::ListTodo = event {
-            notify.send(NotifyCommand::ListTodo);
+        if let ECSCommand::List = event {
+            notify.send(NotifyCommand::List);
         }
     }
 }
@@ -80,38 +88,65 @@ fn handle_create_todo(
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        if let ECSCommand::CreateTodo(params) = event {
-            let id = commands
+        if let ECSCommand::Create(params) = event {
+            let entity = commands
                 .spawn()
                 .insert(Todo)
                 .insert(Name(params.name.to_string()))
                 .insert(CreatedAt(Utc::now()))
+                .insert(UpdatedAt(None))
                 .insert(Done(false))
                 .id();
 
-            notify.send(NotifyCommand::CreateTodo(id));
+            notify.send(NotifyCommand::Create(entity));
+        }
+    }
+}
+
+fn handle_update_todo(
+    mut events: EventReader<ECSCommand>,
+    mut notify: EventWriter<NotifyCommand>,
+    mut query: Query<(Entity, &mut Name, &mut Done, &mut UpdatedAt), With<Todo>>,
+) {
+    for event in events.iter() {
+        if let ECSCommand::Update(params) = event {
+            for (entity, mut name, mut done, mut updated_at) in query.iter_mut() {
+                if entity == params.entity {
+                    if let Some(n) = &params.name {
+                        name.0 = n.to_string();
+                    }
+                    if let Some(d) = params.done {
+                        done.0 = d;
+                    }
+                    updated_at.0 = Some(Utc::now());
+
+                    notify.send(NotifyCommand::Update(entity))
+                }
+            }
         }
     }
 }
 
 fn notify_list_todo(
     mut events: EventReader<NotifyCommand>,
-    query: Query<(&Name, &CreatedAt, &Done), With<Todo>>,
-    sender: Res<Sender<UICommand>>
+    query: Query<(Entity, &Name, &Done, &CreatedAt, &UpdatedAt), With<Todo>>,
+    sender: Res<Sender<UICommand>>,
 ) {
     for event in events.iter() {
-        if let NotifyCommand::ListTodo = event {
+        if let NotifyCommand::List = event {
             println!("🧠 List Todo");
 
             let mut list = vec![];
-            for (name, created_at, done) in  query.iter() {
+            for (entity, name, done, created_at, updated_at) in query.iter() {
                 list.push(UITodoItem {
+                    entity,
                     name: name.0.clone(),
-                    created_at: created_at.0,
                     done: done.0,
+                    created_at: created_at.0,
+                    updated_at: updated_at.0,
                 });
             }
-            let _res = sender.send(UICommand::ListTodo(list));
+            let _res = sender.send(UICommand::List(list));
         }
     }
 }
@@ -119,22 +154,48 @@ fn notify_list_todo(
 // TODO: consider sending just a diff but it requires more work on UI side
 fn notify_create_todo(
     mut events: EventReader<NotifyCommand>,
-    query: Query<(&Name, &CreatedAt, &Done), With<Todo>>,
-    sender: Res<Sender<UICommand>>
+    query: Query<(Entity, &Name, &Done, &CreatedAt, &UpdatedAt), With<Todo>>,
+    sender: Res<Sender<UICommand>>,
 ) {
     for event in events.iter() {
-        if let NotifyCommand::CreateTodo(_target_entity) = event {
-            println!("🧠 Create Todo");
+        if let NotifyCommand::Create(target_entity) = event {
+            println!("🧠 Create Todo: {:?}", target_entity);
 
             let mut list = vec![];
-            for (name, created_at, done) in  query.iter() {
+            for (entity, name, done, created_at, updated_at) in query.iter() {
                 list.push(UITodoItem {
+                    entity,
                     name: name.0.clone(),
-                    created_at: created_at.0,
                     done: done.0,
+                    created_at: created_at.0,
+                    updated_at: updated_at.0,
                 });
             }
-            let _res = sender.send(UICommand::CreateTodo(list));
+            let _res = sender.send(UICommand::Create(list));
+        }
+    }
+}
+
+fn notify_update_todo(
+    mut events: EventReader<NotifyCommand>,
+    query: Query<(Entity, &Name, &Done, &CreatedAt, &UpdatedAt), With<Todo>>,
+    sender: Res<Sender<UICommand>>,
+) {
+    for event in events.iter() {
+        if let NotifyCommand::Update(target_entity) = event {
+            println!("🧠 Update Todo: {:?}", target_entity);
+
+            let mut list = vec![];
+            for (entity, name, done, created_at, updated_at) in query.iter() {
+                list.push(UITodoItem {
+                    entity,
+                    name: name.0.clone(),
+                    done: done.0,
+                    created_at: created_at.0,
+                    updated_at: updated_at.0,
+                });
+            }
+            let _res = sender.send(UICommand::Update(list));
         }
     }
 }
@@ -142,6 +203,7 @@ fn notify_create_todo(
 // Event
 
 enum NotifyCommand {
-    ListTodo,
-    CreateTodo(Entity),
+    List,
+    Create(Entity),
+    Update(Entity),
 }
