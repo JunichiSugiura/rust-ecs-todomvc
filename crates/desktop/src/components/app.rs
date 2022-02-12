@@ -102,7 +102,8 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                     match cmd {
                         UICommand::List(list)
                         | UICommand::Create(list)
-                        | UICommand::Update(list) => {
+                        | UICommand::Update(list)
+                        | UICommand::Delete(list) => {
                             set_list(list);
                         }
                     }

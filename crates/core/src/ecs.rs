@@ -18,9 +18,11 @@ pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
         .add_system(handle_list_todo)
         .add_system(handle_create_todo)
         .add_system(handle_update_todo)
+        .add_system(handle_delete_todo)
         .add_system_to_stage(CoreStage::Last, notify_list_todo)
         .add_system_to_stage(CoreStage::Last, notify_create_todo)
         .add_system_to_stage(CoreStage::Last, notify_update_todo)
+        .add_system_to_stage(CoreStage::Last, notify_delete_todo)
         .run();
 }
 
@@ -120,7 +122,26 @@ fn handle_update_todo(
                     }
                     updated_at.0 = Some(Utc::now());
 
-                    notify.send(NotifyCommand::Update(entity))
+                    notify.send(NotifyCommand::Update(entity));
+                }
+            }
+        }
+    }
+}
+
+fn handle_delete_todo(
+    mut events: EventReader<ECSCommand>,
+    mut notify: EventWriter<NotifyCommand>,
+    query: Query<Entity, With<Todo>>,
+    mut commands: Commands,
+) {
+    for event in events.iter() {
+        if let ECSCommand::Delete(target_entity) = event {
+            for entity in query.iter() {
+                if entity == *target_entity {
+                    commands.entity(*target_entity).despawn();
+
+                    notify.send(NotifyCommand::Delete(entity));
                 }
             }
         }
@@ -200,10 +221,35 @@ fn notify_update_todo(
     }
 }
 
+fn notify_delete_todo(
+    mut events: EventReader<NotifyCommand>,
+    query: Query<(Entity, &Name, &Done, &CreatedAt, &UpdatedAt), With<Todo>>,
+    sender: Res<Sender<UICommand>>,
+) {
+    for event in events.iter() {
+        if let NotifyCommand::Delete(target_entity) = event {
+            println!("🧠 Delete Todo: {:?}", target_entity);
+
+            let mut list = vec![];
+            for (entity, name, done, created_at, updated_at) in query.iter() {
+                list.push(UITodoItem {
+                    entity,
+                    name: name.0.clone(),
+                    done: done.0,
+                    created_at: created_at.0,
+                    updated_at: updated_at.0,
+                });
+            }
+            let _res = sender.send(UICommand::Update(list));
+        }
+    }
+}
+
 // Event
 
 enum NotifyCommand {
     List,
     Create(Entity),
     Update(Entity),
+    Delete(Entity),
 }
