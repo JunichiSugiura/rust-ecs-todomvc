@@ -2,13 +2,13 @@
 
 use dioxus::prelude::*;
 use todo_core::command::{
-    ecs::{CreateParams, ECSCommand, UpdateParams},
+    core::{CoreCommand, CreateParams, UpdateParams},
     ui::{UICommand, UITodoList},
 };
 use tokio::sync::broadcast::Sender;
 
 pub struct AppProps {
-    pub core_tx: Sender<ECSCommand>,
+    pub core_tx: Sender<CoreCommand>,
     pub ui_tx: Sender<UICommand>,
 }
 
@@ -110,13 +110,13 @@ pub fn app(cx: Scope<AppProps>) -> Element {
     });
 
     use_once(&cx, || {
-        let _res = tx.read().send(ECSCommand::List);
+        let _res = tx.read().send(CoreCommand::List);
     });
 
     let submit = move || {
         if !name.is_empty() {
             let params = CreateParams::new(name.to_string());
-            if let Ok(_res) = tx.read().send(ECSCommand::Create(params)) {
+            if let Ok(_res) = tx.read().send(CoreCommand::Create(params)) {
                 set_name("".to_string());
             }
         }
@@ -157,7 +157,7 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                                         done: Some(!item.done),
                                         name: None,
                                     };
-                                    let _res = tx.read().send(ECSCommand::Update(params));
+                                    let _res = tx.read().send(CoreCommand::Update(params));
                                 },
                                 item.done.then(|| rsx!{
                                     "✅"

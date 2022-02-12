@@ -1,5 +1,5 @@
 use crate::command::{
-    ecs::ECSCommand,
+    core::CoreCommand,
     ui::{UICommand, UITodoItem},
 };
 use bevy_app::prelude::*;
@@ -7,12 +7,12 @@ use bevy_ecs::{event::Events, prelude::*};
 use chrono::prelude::*;
 use tokio::sync::broadcast::Sender;
 
-pub fn start_ecs(ui_tx: Sender<UICommand>, core_tx: Sender<ECSCommand>) {
+pub fn start_ecs(ui_tx: Sender<UICommand>, core_tx: Sender<CoreCommand>) {
     App::new()
         .set_runner(runner)
         .insert_resource(ui_tx)
         .insert_resource(core_tx)
-        .add_event::<ECSCommand>()
+        .add_event::<CoreCommand>()
         .add_event::<NotifyCommand>()
         .add_startup_system(setup)
         .add_system(handle_list_todo)
@@ -48,11 +48,11 @@ struct Done(bool);
 fn runner(mut app: App) {
     app.update();
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<ECSCommand>(32);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<CoreCommand>(32);
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
-    if let Some(core_tx) = app.world.get_resource_mut::<Sender<ECSCommand>>() {
+    if let Some(core_tx) = app.world.get_resource_mut::<Sender<CoreCommand>>() {
         let mut rx = core_tx.subscribe();
         runtime.spawn(async move {
             loop {
@@ -64,7 +64,7 @@ fn runner(mut app: App) {
     }
 
     while let Some(cmd) = rx.blocking_recv() {
-        let mut event = app.world.get_resource_mut::<Events<ECSCommand>>().unwrap();
+        let mut event = app.world.get_resource_mut::<Events<CoreCommand>>().unwrap();
         event.send(cmd);
         app.update();
     }
@@ -76,21 +76,21 @@ fn setup() {
     println!("ECS: Initializing");
 }
 
-fn handle_list_todo(mut events: EventReader<ECSCommand>, mut notify: EventWriter<NotifyCommand>) {
+fn handle_list_todo(mut events: EventReader<CoreCommand>, mut notify: EventWriter<NotifyCommand>) {
     for event in events.iter() {
-        if let ECSCommand::List = event {
+        if let CoreCommand::List = event {
             notify.send(NotifyCommand::List);
         }
     }
 }
 
 fn handle_create_todo(
-    mut events: EventReader<ECSCommand>,
+    mut events: EventReader<CoreCommand>,
     mut notify: EventWriter<NotifyCommand>,
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        if let ECSCommand::Create(params) = event {
+        if let CoreCommand::Create(params) = event {
             let entity = commands
                 .spawn()
                 .insert(Todo)
@@ -106,12 +106,12 @@ fn handle_create_todo(
 }
 
 fn handle_update_todo(
-    mut events: EventReader<ECSCommand>,
+    mut events: EventReader<CoreCommand>,
     mut notify: EventWriter<NotifyCommand>,
     mut query: Query<(Entity, &mut Name, &mut Done, &mut UpdatedAt), With<Todo>>,
 ) {
     for event in events.iter() {
-        if let ECSCommand::Update(params) = event {
+        if let CoreCommand::Update(params) = event {
             for (entity, mut name, mut done, mut updated_at) in query.iter_mut() {
                 if entity == params.entity {
                     if let Some(n) = &params.name {
@@ -130,13 +130,13 @@ fn handle_update_todo(
 }
 
 fn handle_delete_todo(
-    mut events: EventReader<ECSCommand>,
+    mut events: EventReader<CoreCommand>,
     mut notify: EventWriter<NotifyCommand>,
     query: Query<Entity, With<Todo>>,
     mut commands: Commands,
 ) {
     for event in events.iter() {
-        if let ECSCommand::Delete(target_entity) = event {
+        if let CoreCommand::Delete(target_entity) = event {
             for entity in query.iter() {
                 if entity == *target_entity {
                     commands.entity(*target_entity).despawn();

@@ -1,8 +1,8 @@
-pub mod ecs {
+pub mod core {
     pub use bevy_ecs::entity::Entity;
 
     #[derive(Debug, Clone)]
-    pub enum ECSCommand {
+    pub enum CoreCommand {
         List,
         Create(CreateParams),
         Update(UpdateParams),
