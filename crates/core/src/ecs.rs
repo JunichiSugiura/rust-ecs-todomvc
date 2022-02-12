@@ -7,11 +7,11 @@ use bevy_ecs::{event::Events, prelude::*};
 use chrono::prelude::*;
 use tokio::sync::broadcast::Sender;
 
-pub fn start_ecs(sender: Sender<UICommand>, receiver: Sender<ECSCommand>) {
+pub fn start_ecs(ui_tx: Sender<UICommand>, core_tx: Sender<ECSCommand>) {
     App::new()
         .set_runner(runner)
-        .insert_resource(sender)
-        .insert_resource(receiver)
+        .insert_resource(ui_tx)
+        .insert_resource(core_tx)
         .add_event::<ECSCommand>()
         .add_event::<NotifyCommand>()
         .add_startup_system(setup)
@@ -52,8 +52,8 @@ fn runner(mut app: App) {
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
-    if let Some(sender) = app.world.get_resource_mut::<Sender<ECSCommand>>() {
-        let mut rx = sender.subscribe();
+    if let Some(core_tx) = app.world.get_resource_mut::<Sender<ECSCommand>>() {
+        let mut rx = core_tx.subscribe();
         runtime.spawn(async move {
             loop {
                 while let Ok(cmd) = rx.recv().await {

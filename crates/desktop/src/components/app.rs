@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use std::cell::Cell;
 use todo_core::command::{
     ecs::{CreateParams, ECSCommand, UpdateParams},
     ui::{UICommand, UITodoList},
@@ -9,8 +8,8 @@ use todo_core::command::{
 use tokio::sync::broadcast::Sender;
 
 pub struct AppProps {
-    pub sender: Cell<Option<Sender<ECSCommand>>>,
-    pub receiver: Cell<Option<Sender<UICommand>>>,
+    pub core_tx: Sender<ECSCommand>,
+    pub ui_tx: Sender<UICommand>,
 }
 
 fn use_once(cx: &ScopeState, f: impl FnOnce()) {
@@ -89,23 +88,21 @@ styled!(ItemTitle, div, "");
 pub fn app(cx: Scope<AppProps>) -> Element {
     let (list, set_list) = use_state(&cx, || UITodoList::default());
     let (name, set_name) = use_state(&cx, || String::new());
-    let sender = use_ref(&cx, || cx.props.sender.take().unwrap());
+    let tx = use_ref(&cx, || cx.props.core_tx.clone());
 
     use_future(&cx, || {
-        let receiver = cx.props.receiver.take();
+        let mut rx = cx.props.ui_tx.subscribe();
         let set_list = set_list.to_owned();
         async move {
-            if let Some(receiver) = receiver {
-                while let Ok(cmd) = receiver.subscribe().recv().await {
-                    println!("🎨 {:?}", cmd);
+            while let Ok(cmd) = rx.recv().await {
+                println!("🎨 {:?}", cmd);
 
-                    match cmd {
-                        UICommand::List(list)
-                        | UICommand::Create(list)
-                        | UICommand::Update(list)
-                        | UICommand::Delete(list) => {
-                            set_list(list);
-                        }
+                match cmd {
+                    UICommand::List(list)
+                    | UICommand::Create(list)
+                    | UICommand::Update(list)
+                    | UICommand::Delete(list) => {
+                        set_list(list);
                     }
                 }
             }
@@ -113,13 +110,13 @@ pub fn app(cx: Scope<AppProps>) -> Element {
     });
 
     use_once(&cx, || {
-        let _res = sender.read().send(ECSCommand::List);
+        let _res = tx.read().send(ECSCommand::List);
     });
 
     let submit = move || {
         if !name.is_empty() {
             let params = CreateParams::new(name.to_string());
-            if let Ok(_res) = sender.read().send(ECSCommand::Create(params)) {
+            if let Ok(_res) = tx.read().send(ECSCommand::Create(params)) {
                 set_name("".to_string());
             }
         }
@@ -160,7 +157,7 @@ pub fn app(cx: Scope<AppProps>) -> Element {
                                         done: Some(!item.done),
                                         name: None,
                                     };
-                                    let _res = sender.read().send(ECSCommand::Update(params));
+                                    let _res = tx.read().send(ECSCommand::Update(params));
                                 },
                                 item.done.then(|| rsx!{
                                     "✅"
