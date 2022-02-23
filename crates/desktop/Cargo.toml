@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.1.8", features = ["desktop"] }
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", features = ["desktop", "fermi"] }
 todo_core = { path = "../core" }
 tokio = { version = "1.16", features = ["full"] }
 

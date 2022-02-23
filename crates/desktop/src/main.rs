@@ -1,9 +1,11 @@
-use components::{app, AppProps};
+use components::{App, AppProps};
 use dioxus;
 use todo_core::{command::core::CoreCommand, command::ui::UICommand, start_ecs};
 use tokio::sync::broadcast;
 
 mod components;
+mod state;
+mod util;
 
 fn main() {
     let (ui_tx, _) = broadcast::channel::<UICommand>(8);
@@ -16,5 +18,5 @@ fn main() {
         start_ecs(ui_tx2, core_tx2);
     });
 
-    dioxus::desktop::launch_with_props(app, AppProps { core_tx, ui_tx }, |c| c);
+    dioxus::desktop::launch_with_props(App, AppProps { core_tx, ui_tx }, |c| c);
 }

@@ -1,8 +1,8 @@
-#![allow(non_snake_case)]
-
+use crate::{components::*, state::CORE_TX, styled, util::use_once};
+use dioxus::fermi::prelude::*;
 use dioxus::prelude::*;
 use todo_core::command::{
-    core::{CoreCommand, CreateParams, UpdateParams},
+    core::{CoreCommand, UpdateParams},
     ui::{UICommand, UITodoList},
 };
 use tokio::sync::broadcast::Sender;
@@ -12,31 +12,8 @@ pub struct AppProps {
     pub ui_tx: Sender<UICommand>,
 }
 
-fn use_once(cx: &ScopeState, f: impl FnOnce()) {
-    let init = cx.use_hook(|_| true);
-    if *init {
-        f();
-        *init = false;
-    }
-}
-
-#[macro_export]
-macro_rules! styled {
-    ($name:ident, $element:ident, $style:expr) => {
-        #[inline_props]
-        pub fn $name<'a>(cx: Scope, children: Element<'a>) -> Element<'a> {
-            cx.render(rsx! {
-                $element {
-                    style: $style,
-                    children
-                }
-            })
-        }
-    };
-}
-
 styled!(
-    Box,
+    Container,
     div,
     "
     background: #f5f5f5;
@@ -49,26 +26,7 @@ styled!(
 );
 
 styled!(
-    Header,
-    div,
-    " display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-bottom: 1rem;
-"
-);
-
-styled!(
     List, div, "
-"
-);
-
-styled!(
-    Title,
-    div,
-    "
-    font-size: 6.25rem;
-    color: rgba(175, 47, 47, 0.15);
 "
 );
 
@@ -85,10 +43,11 @@ styled!(
 
 styled!(ItemTitle, div, "");
 
-pub fn app(cx: Scope<AppProps>) -> Element {
+pub fn App(cx: Scope<AppProps>) -> Element {
     let (list, set_list) = use_state(&cx, || UITodoList::default());
-    let (name, set_name) = use_state(&cx, || String::new());
-    let tx = use_ref(&cx, || cx.props.core_tx.clone());
+    let core_tx = cx.props.core_tx.clone();
+    let tx = use_read(&cx, CORE_TX);
+    let set_core_tx = use_set(&cx, CORE_TX);
 
     use_future(&cx, || {
         let mut rx = cx.props.ui_tx.subscribe();
@@ -110,66 +69,43 @@ pub fn app(cx: Scope<AppProps>) -> Element {
     });
 
     use_once(&cx, || {
-        let _res = tx.read().send(CoreCommand::List);
+        let _ = core_tx.send(CoreCommand::List);
+        set_core_tx(Some(core_tx));
     });
 
-    let submit = move || {
-        if !name.is_empty() {
-            let params = CreateParams::new(name.to_string());
-            if let Ok(_res) = tx.read().send(CoreCommand::Create(params)) {
-                set_name("".to_string());
-            }
-        }
-    };
+    match tx {
+        Some(tx) => cx.render(rsx! {
+            style { [include_str!("../styles/global.css")] },
+            Header {}
 
-    cx.render(rsx! {
-        style { [include_str!("../styles/global.css")] },
-
-        Box {
-            Header {
-                Title {
-                    "todos"
+            Container {
+                List {
+                    list.iter().map(|item| {
+                        rsx!(
+                            Item {
+                                div {
+                                    class: "checkbox",
+                                    onclick: |_| {
+                                        let params = UpdateParams{
+                                            entity: item.entity,
+                                            done: Some(!item.done),
+                                            name: None,
+                                        };
+                                        let _res = tx.send(CoreCommand::Update(params));
+                                    },
+                                    item.done.then(|| rsx!{
+                                        "✅"
+                                    })
+                                }
+                                ItemTitle {
+                                    "{item.name}"
+                                }
+                            }
+                        )
+                    })
                 }
-                div {
-                    input {
-                        placeholder: "What needs to be done?",
-                        value: "{name}",
-                        autofocus: "true",
-                        oninput: move |e| set_name(e.value.clone()),
-                        onkeydown: move |e| {
-                            if e.key == "Enter" {
-                                submit();
-                            }
-                        }
-                    }
-                }
             }
-
-            List {
-                list.iter().map(|item| {
-                    rsx!(
-                        Item {
-                            div {
-                                class: "checkbox",
-                                onclick: |_| {
-                                    let params = UpdateParams{
-                                        entity: item.entity,
-                                        done: Some(!item.done),
-                                        name: None,
-                                    };
-                                    let _res = tx.read().send(CoreCommand::Update(params));
-                                },
-                                item.done.then(|| rsx!{
-                                    "✅"
-                                })
-                            }
-                            ItemTitle {
-                                "{item.name}"
-                            }
-                        }
-                    )
-                })
-            }
-        }
-    })
+        }),
+        None => None,
+    }
 }
